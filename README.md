@@ -1,46 +1,114 @@
-# Getting Started with Create React App
+# CIP-0045 Demo Implementation
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This is a demo implementation of [CIP-0045](https://github.com/cardano-foundation/CIPs/pull/395) that uses [cardano-peer-connect](https://github.com/fabianbormann/cardano-peer-connect).
 
-## Available Scripts
+<img src="https://user-images.githubusercontent.com/1525818/209772566-54ac650b-efb2-4f84-8f7b-eaeedb6f5f90.gif" width="600" />
 
-In the project directory, you can run:
+## Getting Started
 
-### `npm start`
+### Run the Server (aka the dApp)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Open the [dApp.html](./dApp.html) file and your dev tools to see the console log outputs.
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+### Explanation
 
-### `npm test`
+The server (dApp) is just a blank VSCode HTML5 template with the following changes:
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+1. Import cardano-peer-connect in the header
 
-### `npm run build`
+```html
+<script src="https://fabianbormann.github.io/cardano-peer-connect/bundle.min.js"></script>
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+2. Create a new DAppPeerConnect instance, plot the QR code and print the address (identifier)
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```html
+<script>
+  const dAppConnect = new CardanoPeerConnect.DAppPeerConnect();
+  dAppConnect.generateQRCode(document.getElementById('qr-code'));
+  document.getElementById('address').innerText = dAppConnect.getAddress();
+</script>
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+The DAppPeerConnect instance is now waiting for clients to connect. It provides api rpc methods under the hood to allow a client to connect and inject it's api to the global window object.
 
-### `npm run eject`
+## Client (aka Wallet App)
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### Run the Client
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```zsh
+cd demo-wallet-app
+npm i
+npm start
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+#### Testing (PoC)
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+Once you have the server and client running you should see something like
 
-## Learn More
+```js
+[info] [Meerkat]: injected api of boostwallet into window.cardano
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+in your dApp logs. Now you can issue
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```js
+window.cardano.boostwallet
+  .getRewardAddresses()
+  .then((result) => console.log(result));
+```
+
+to execute the remote call and get the reward address from your Wallet (dApp.html).
+
+### Explanation
+
+The wallet app is actually the result of:
+
+1. The blank ionic react template with cardano-peer-connect as an additional npm package
+
+```zsh
+ionic start demo-wallet-app blank --type react
+cd demo-wallet-app
+npm i @fabianbormann/cardano-peer-connect
+```
+
+2. An Implementation of the abstract class `CardanoPeerConnect` within [BoostPeerConnect.tsx](./demo-wallet-app/src/BoostPeerConnect.tsx) (feel free to adjust the name to e.g. `[MyWalletName]PeerConnect`)
+
+3. BoostPeerConnect is now ready to use. Please see the example usage in [Home.tsx](./demo-wallet-app/src/pages/Home.tsx)
+
+```ts
+import { BoostPeerConnect } from '../BoostPeerConnect';
+
+...
+
+const connectWithDApp = () => {
+  const seed = boostPeerConnect.current.connect(
+    dAppIdentifier,
+    [
+      'https://pro.passwordchaos.gimbalabs.io',
+      'wss://tracker.files.fm:7073/announce',
+      'wss://tracker.btorrent.xyz',
+      'ws://tracker.files.fm:7072/announce',
+      'wss://tracker.openwebtorrent.com:443/announce',
+    ],
+    localStorage.getItem('meerkat-boostwallet-seed')
+  );
+  localStorage.setItem('meerkat-boostwallet-seed', seed);
+};
+
+return (
+...
+  <IonInput
+    onIonChange={(event) =>
+      setDAppIdentifier(`${event.target.value}`)
+    }
+    placeholder="dApp identifier"
+  ></IonInput>
+  ...
+  <IonButton onClick={connectWithDApp} fill="solid">
+    Connect
+  </IonButton>
+...
+)
+
+```
